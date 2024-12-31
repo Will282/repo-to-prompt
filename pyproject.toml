@@ -40,3 +40,6 @@ testpaths = [
     "tests",
 ]
 pythonpath = "."
+
+[tool.poetry.scripts]
+r2p = "repo_to_prompt.cli:main"

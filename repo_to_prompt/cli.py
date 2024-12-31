@@ -21,7 +21,7 @@ def main(repo: str, output_dir: str, max_tokens: int):
     """
     Converts a Git repository into text files suitable for LLM ingestion.
 
-    Repo is the local path or remote URL of the Git repository.
+    REPO is the local path or remote URL of the Git repository.
     """
     with RepositoryHandler(
         repo_input=repo,
