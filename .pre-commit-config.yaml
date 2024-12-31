@@ -1,0 +1,49 @@
+## General
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+        args: ["--unsafe"]
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-aws-credentials
+        args: ["--allow-missing-credentials"]
+      - id: mixed-line-ending
+        args: ["--fix", "lf"]
+
+## Python
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: isort (python)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.1
+    hooks:
+    -   id: mypy
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        name: pflake8
+        entry: pflake8
+        description: "pyproject-flake8 (`pflake8`), a monkey patching wrapper to connect flake8 with pyproject.toml configuration"
+        additional_dependencies: [pyproject-flake8]
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        types: [python]
+        entry: .venv/bin/pytest
+        args: [-c, pyproject.toml]
+        language: system
+        pass_filenames: false
+        always_run: true
