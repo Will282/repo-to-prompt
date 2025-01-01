@@ -38,6 +38,27 @@ def test_remote_repository_with_real_repo(tmp_path):
 
 
 @pytest.mark.integration
+def test_local_repository(tmp_path):
+    """
+    Integration test for processing a real remote Git repository.
+    """
+    output_dir = tmp_path / "output"
+
+    with RepositoryHandler(
+        repo_input=".",
+        output_dir=output_dir,
+    ) as repo_handler:
+        repo_handler.process_repository()
+
+    output_files = list(output_dir.glob("chunk_*.txt"))
+    assert len(output_files) > 0, "Processing the remote repository should generate output files."
+
+    all_content = "".join([file.read_text() for file in output_files])
+    assert "repo_to_prompt" in all_content, "Repository structure should include the repo name."
+    assert "File:" in all_content, "Output should include file markers indicating file content was processed."
+
+
+@pytest.mark.integration
 def test_cli_integration(tmp_path):
     """
     Integration test for the CLI to ensure end-to-end functionality.

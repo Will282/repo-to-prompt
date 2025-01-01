@@ -7,7 +7,9 @@ from repo_to_prompt.repository import BASE_IGNORE_PATTERNS, RepositoryHandler
 
 
 def test_repository_handler_init_local_repo(temp_git_repo, tmp_path):
-    """Test that a RepositoryHandler initializes correctly."""
+    """
+    Test that a RepositoryHandler initializes correctly.
+    """
     (temp_git_repo / "file1.txt").write_text("Content of file1")
 
     repo_handler = RepositoryHandler(repo_input=str(temp_git_repo), output_dir=tmp_path / "output", max_tokens=1000)
@@ -22,7 +24,9 @@ def test_repository_handler_init_local_repo(temp_git_repo, tmp_path):
 
 
 def test_repository_handler_invalid_repo(tmp_path):
-    """Test that RepositoryHandler with invalid path raises an error."""
+    """
+    Test that RepositoryHandler with invalid path raises an error.
+    """
     with pytest.raises(ValueError):
         RepositoryHandler(
             repo_input="invalid/path",
@@ -31,7 +35,9 @@ def test_repository_handler_invalid_repo(tmp_path):
 
 
 def test_load_ignore_patterns(temp_git_repo, tmp_path):
-    """Test a .gitignore file is loaded correctly by the RepositoryHandler."""
+    """
+    Test a .gitignore file is loaded correctly by the RepositoryHandler.
+    """
 
     # Create a .gitignore file
     gitignore_content = """
@@ -53,6 +59,9 @@ def test_load_ignore_patterns(temp_git_repo, tmp_path):
 
 
 def test_should_ignore(temp_git_repo, tmp_path):
+    """
+    Tests that the _should_ignore method correctly handles ignored files.
+    """
     # Create files
     (temp_git_repo / "file1.txt").write_text("Content of file1")
     (temp_git_repo / "file2.log").write_text("Content of file2")
@@ -77,7 +86,9 @@ def test_should_ignore(temp_git_repo, tmp_path):
 
 
 def test_collect_files(temp_git_repo, tmp_path):
-    """Test all files collected correctly"""
+    """
+    Tests that files are collected correctly, excluding ignored files.
+    """
 
     # Create files that should be included and ignored
     (temp_git_repo / "file1.txt").write_text("Content of file1")
@@ -106,8 +117,10 @@ def test_collect_files(temp_git_repo, tmp_path):
 
 
 def test_generate_tree_structure(temp_git_repo, tmp_path):
-    """Validates that the generate_tree_structure method produces a correct tree-like representation of the
-    repository, respecting ignore patterns."""
+    """
+    Validates that the generate_tree_structure method produces a correct tree-like representation of the
+    repository, respecting ignore patterns.
+    """
     # Create files and directories
     (temp_git_repo / "file1.txt").write_text("Content of file1")
     (temp_git_repo / "dir1").mkdir()
@@ -141,8 +154,10 @@ def test_generate_tree_structure(temp_git_repo, tmp_path):
 
 
 def test_process_repository(temp_git_repo, tmp_path):
-    """Ensures the process_repository method integrates with OutputGenerator to split and save files correctly when
-    the token limit is exceeded."""
+    """
+    Ensures the process_repository method integrates with OutputGenerator to split and save files correctly when
+    the token limit is exceeded.
+    """
     # --- Setup: Create a sample repository structure ---
     (temp_git_repo / "file1.txt").write_text("Content of file1 " * 100)
     (temp_git_repo / "subdir").mkdir()
@@ -186,7 +201,9 @@ def test_process_repository(temp_git_repo, tmp_path):
 
 
 def test_process_repository_content_splitting(temp_git_repo, tmp_path):
-    """Ensure content splitting respects max token limits and includes all content."""
+    """
+    Ensure content splitting respects max token limits and includes all content.
+    """
     (temp_git_repo / "file1.txt").write_text("A" * 200)
     (temp_git_repo / "file2.txt").write_text("B" * 200)
 
@@ -202,7 +219,9 @@ def test_process_repository_content_splitting(temp_git_repo, tmp_path):
 
 
 def test_collect_non_utf8_files(temp_git_repo, tmp_path):
-    """Ensure non-UTF-8 files are skipped gracefully."""
+    """
+    Ensure non-UTF-8 files are skipped gracefully.
+    """
     (temp_git_repo / "binary_file.bin").write_bytes(b"\x80\x81\x82\x83")
     repo_handler = RepositoryHandler(repo_input=str(temp_git_repo), output_dir=tmp_path / "output")
     files = repo_handler._collect_files()
@@ -210,7 +229,9 @@ def test_collect_non_utf8_files(temp_git_repo, tmp_path):
 
 
 def test_invalid_gitignore(temp_git_repo, tmp_path):
-    """Ensure invalid .gitignore patterns are handled gracefully."""
+    """
+    Ensure invalid .gitignore patterns are handled gracefully.
+    """
     (temp_git_repo / ".gitignore").write_text("[INVALID PATTERN")
     repo_handler = RepositoryHandler(repo_input=str(temp_git_repo), output_dir=tmp_path / "output")
     assert repo_handler.ignore_spec is not None, "Ignore patterns should still be initialized."

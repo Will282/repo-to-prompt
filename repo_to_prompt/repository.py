@@ -1,9 +1,10 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import TracebackType
 from typing import Optional
 
-import pathspec
 from git import Git, GitCommandError, Repo
+from pathspec import PathSpec
 
 from repo_to_prompt.models import FileContent
 from repo_to_prompt.output import OutputGenerator
@@ -28,20 +29,68 @@ BASE_IGNORE_PATTERNS = [
 
 
 class RepositoryHandler:
-    def __init__(self, repo_input: str, output_dir: str, max_tokens: int = 2_000_000, git_instance=None):
+    """
+    Handles the processing of Git repositories, either local or remote, and generates structured text outputs
+    suitable for large language models (LLMs).
+
+    Attributes:
+        repo_input (str): The local path or remote URL of the repository.
+        output_dir (Path): Directory where output files will be saved.
+        max_tokens (int): Maximum number of tokens allowed per output chunk.
+        git_instance (Git): Git instance for running Git commands.
+        temp_dir (Optional[TemporaryDirectory]): Temporary directory for cloning remote repositories.
+        repo (Repo): The Git repository instance.
+        repo_dir (Path): The working directory of the repository.
+        ignore_spec (PathSpec): Path specification for ignored files based on `.gitignore` patterns.
+    """
+
+    def __init__(
+        self,
+        repo_input: str,
+        output_dir: str,
+        max_tokens: int = 2_000_000,
+        git_instance: Optional[Git] = None,
+    ):
+        """
+        Initializes the RepositoryHandler instance.
+
+        Args:
+            repo_input (str): The local path or remote URL of the Git repository.
+            output_dir (str): Directory where output files will be saved.
+            max_tokens (int): Maximum tokens allowed per output chunk (default is 2,000,000).
+            git_instance (Git, optional): Git instance for executing Git commands. Defaults to None.
+        """
         self.repo_input = repo_input
         self.output_dir = Path(output_dir)
         self.max_tokens = max_tokens
         self.git_instance = git_instance or Git()
         self.temp_dir: Optional[TemporaryDirectory] = None
         self.repo = self._get_repo()
-        self.repo_dir = Path(self.repo.working_tree_dir)
+        self.repo_dir = Path(self.repo.working_tree_dir)  # type: ignore
         self.ignore_spec = self._load_ignore_patterns()
 
-    def __enter__(self):
+    def __enter__(self) -> "RepositoryHandler":
+        """
+        Enters the context manager for the RepositoryHandler.
+
+        Returns:
+            RepositoryHandler: The current instance of the RepositoryHandler.
+        """
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
+        """Exits the context manager for the RepositoryHandler and cleans up the temporary directory if it exists.
+
+        Args:
+            exc_type (Optional[type[BaseException]]): The exception type.
+            exc_value (Optional[BaseException]): The exception instance.
+            traceback (Optional[TracebackType]): The traceback object.
+        """
         if self.temp_dir:
             self.temp_dir.cleanup()
 
@@ -56,24 +105,41 @@ class RepositoryHandler:
         )
 
     def _get_repo(self) -> Repo:
+        """
+        Resolves the Git repository, either from a local path or by cloning a remote repository.
 
-        if Path(self.repo_input).exists():
-            return Repo(self.repo_input)
+        Returns:
+            Repo: The Git repository instance.
 
-        is_remote = False
-        try:
-            self.git_instance.ls_remote(self.repo_input)
-            is_remote = True
-        except GitCommandError:
-            pass
-
-        if is_remote:
-            self.temp_dir = TemporaryDirectory()
-            return Repo.clone_from(url=self.repo_input, to_path=self.temp_dir.name)
+        Raises:
+            ValueError:
+                - If the provided path or URL is not a valid repository.
+                - If the `working_tree_dir` of the cloned repository is `None`.
+        """
+        # Handle local repo
+        local_path = Path(self.repo_input)
+        if local_path.exists():
+            repo = Repo(self.repo_input)
+        # Handle remote repo
         else:
-            raise ValueError(f"Repository at {self.repo_input} is not a valid local or valid remote repository.")
+            try:
+                self.git_instance.ls_remote(self.repo_input)
+            except GitCommandError as e:
+                raise ValueError(f"Invalid repository URL: {self.repo_input}") from e
 
-    def process_repository(self):
+            self.temp_dir = TemporaryDirectory()
+            repo = Repo.clone_from(url=self.repo_input, to_path=self.temp_dir.name)
+
+        if repo.working_tree_dir is None:
+            raise ValueError("The repository has no valid working directory.")
+
+        return repo
+
+    def process_repository(self) -> None:
+        """
+        Processes the repository by generating a tree structure and collecting files, then delegates the splitting and
+        saving of files to the OutputGenerator.
+        """
         repo_structure = self.generate_tree_structure()
         files = self._collect_files()
 
@@ -83,7 +149,14 @@ class RepositoryHandler:
         )
         output_generator.split_and_save(repo_structure, files)
 
-    def _load_ignore_patterns(self):
+    def _load_ignore_patterns(self) -> PathSpec:
+        """
+        Loads ignore patterns from `.gitignore` and other Git-specific ignore files.
+
+        Returns:
+            PathSpec: A compiled PathSpec object containing all ignore patterns.
+        """
+
         def parse_gitignore_lines(lines: list[str]):
             lines = [line.strip() for line in lines]
             return [line for line in lines if not line.startswith("#")]
@@ -106,9 +179,15 @@ class RepositoryHandler:
         patterns = list(set(patterns))
 
         # Compile the ignore patterns
-        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+        return PathSpec.from_lines("gitwildmatch", patterns)
 
     def _collect_files(self) -> list[FileContent]:
+        """
+        Collects all non-ignored files from the repository, reading their content and paths.
+
+        Returns:
+            list[FileContent]: A list of FileContent objects representing the files to be processed.
+        """
         files = []
 
         all_paths = [p for p in self.repo_dir.rglob("*") if p.is_file()]
@@ -143,6 +222,9 @@ class RepositoryHandler:
         """
         Generates a tree-like string representation of the repository structure,
         respecting the ignore patterns.
+
+        Returns:
+            str: The tree structure as a string.
         """
         tree_lines = []
 
@@ -165,6 +247,12 @@ class RepositoryHandler:
     def _should_ignore(self, relative_path: Path) -> bool:
         """
         Determines if a given path should be ignored based on the ignore patterns.
+
+        Args:
+            relative_path (Path): The relative path to check.
+
+        Returns:
+            bool: True if the path matches an ignore pattern, False otherwise.
         """
         if ".git" in relative_path.parts:
             return True
@@ -172,13 +260,3 @@ class RepositoryHandler:
         # Convert path to POSIX style for matching (required by pathspec)
         path_str = str(relative_path.as_posix())
         return self.ignore_spec.match_file(path_str)
-
-
-if __name__ == "__main__":
-    # projects_path = Path("/home/wparr/projects")
-    # repo_path = projects_path / "langchain-aws"
-
-    repo_path = "."
-
-    with RepositoryHandler(repo_input=repo_path, output_dir="./output") as repo_handler:
-        repo_handler.process_repository()
